@@ -23,10 +23,10 @@
 ../Core/Inc/CS1237.hpp:143:10:void CS1237::delay_us(uint32_t)	24	static
 ../Core/Inc/ZeroTracker.hpp:17:5:ZeroTracker::ZeroTracker(int32_t)	16	static
 ../Core/Inc/ZeroTracker.hpp:27:13:int32_t ZeroTracker::update(int32_t)	24	static
-../Core/Src/app.cpp:53:17:void RealMain()	168	static,ignoring_inline_asm
+../Core/Src/app.cpp:53:17:void RealMain()	176	static,ignoring_inline_asm
 ../Core/Inc/CS1237.hpp:14:7:CS1237::~CS1237()	16	static
 ../Core/Inc/CS1237.hpp:14:7:virtual CS1237::~CS1237()	16	static
-../Core/Src/app.cpp:92:1:void __static_initialization_and_destruction_0()	16	static
-../Core/Src/app.cpp:92:1:void __static_initialization_and_destruction_1()	8	static
-../Core/Src/app.cpp:92:1:cpp)	8	static
-../Core/Src/app.cpp:92:1:cpp)	8	static
+../Core/Src/app.cpp:96:1:void __static_initialization_and_destruction_0()	16	static
+../Core/Src/app.cpp:96:1:void __static_initialization_and_destruction_1()	8	static
+../Core/Src/app.cpp:96:1:cpp)	8	static
+../Core/Src/app.cpp:96:1:cpp)	8	static

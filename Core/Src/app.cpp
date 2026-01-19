@@ -60,7 +60,7 @@ extern "C" void RealMain(){
 	int32_t dc0,dc1,dc2;
 	int32_t dv0,dv1,dv2;
 	int32_t maxRange=800000;
-	const int32_t divisor = maxRange / 32767;
+	const float scale = 32767.f / maxRange;
 	while(true){
 		v0=sg0.ADCdata;
 		v1=sg1.ADCdata;
@@ -71,14 +71,18 @@ extern "C" void RealMain(){
 		dv0=v0-dc0;
 		dv1=v1-dc1;
 		dv2=v2-dc2;
-		// X component: weighted sum
-		int16_t fx = (int16_t)__SSAT((-dv1 + dv2) / divisor, 16);
+		// X component: fx = v2*cos(330°) + v1*cos(210°) + v0*cos(90°)
+		//              fx = v2*0.866 + v1*(-0.866) + v0*0
+		//              fx ≈ 0.866*(v2 - v1)
+		int16_t fx = (int16_t)__SSAT((int32_t)((dv2 - dv1) * scale * 0.866f), 16);
 
-		// Y component: weighted sum
-		int16_t fy = (int16_t)__SSAT((2*dv0 - dv1 - dv2) / divisor, 16);
+		// Y component: fy = v0*sin(90°) + v1*sin(210°) + v2*sin(330°)
+		//              fy = v0*1 + v1*(-0.5) + v2*(-0.5)
+		//              fy = v0 - 0.5*(v1 + v2)
+		int16_t fy = (int16_t)__SSAT((int32_t)((0.5f*(dv1 + dv2) - dv0) * scale), 16);
 
-		// Z component: average of all three
-		int16_t fz = (int16_t)__SSAT((dv0 + dv1 + dv2) / (divisor * 3), 16);
+		// Z component: average compression (all sensors pushed down)
+		int16_t fz = (int16_t)__SSAT((int32_t)((dv0 + dv1 + dv2) * scale / 3.f), 16);
 
 		// Set axes
 		report.x = fx;
