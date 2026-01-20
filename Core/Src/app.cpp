@@ -52,7 +52,7 @@ typedef struct
 
 extern "C" void RealMain(){
 	while(!(sg0.configGood&&sg1.configGood&&sg2.configGood));
-	PB5=0;
+	PE5=0;
 
 	USB_HID_JoystickReport_t report = {0};
 	ZeroTracker zt0(sg0.ADCdata),zt1(sg1.ADCdata),zt2(sg2.ADCdata);

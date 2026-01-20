@@ -10,9 +10,9 @@
 
 #include "CS1237.hpp"
 
-CS1237 sg0(PA1,PA2);
-CS1237 sg1(PE2,PE3);
-CS1237 sg2(PE0,PE1);
+CS1237 sg0(PB4,PB5);
+CS1237 sg1(PB6,PB7);
+CS1237 sg2(PB8,PB9);
 
 
 
