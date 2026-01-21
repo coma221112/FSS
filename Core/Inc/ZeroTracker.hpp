@@ -27,14 +27,20 @@ public:
     int32_t update(int32_t rawValue) {
         int32_t dev = rawValue - zero;
         int32_t absDev = (dev < 0) ? -dev : dev;
+        int32_t step = 0;
+        if (absDev > deadzone) {
+			if (absDev <= fastzone) {
+				step = fastRate;
+			} else if (absDev <= slowzone) {
+				step = slowRate;
+			}
 
-        if (absDev <= deadzone) {
-            // No adjustment
-        } else if (absDev <= fastzone) {
-            zero += fastRate;//(int32_t)(dev * fastRate);  // Fast tracking
-        } else if (absDev <= slowzone) {
-            zero += slowRate;//(int32_t)(dev * slowRate);  // Slow tracking
-        }
+			if (dev > 0) {
+				zero += step;
+			} else {
+				zero -= step;
+			}
+		}
         return zero;
         // Beyond slowzone: no tracking
     }

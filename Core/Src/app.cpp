@@ -128,9 +128,27 @@ extern "C" void RealMain(){
 		report.buttons.bits.button21 = !PA2;
 		report.buttons.bits.button22 = !PE6;
 
+		static uint32_t pressStartTime = 0;
+		// 读取 PC0 引脚状态
+		if (PC0 == 0) {
+		    // 如果是刚按下（计时器还没启动），则记录当前系统时间
+		    if (pressStartTime == 0) {
+		        pressStartTime = HAL_GetTick();
+		    }
+
+		    // 判断按下持续时间是否超过 5000 毫秒
+		    if (HAL_GetTick() - pressStartTime > 5000) {
+		        zt0.calibrate(sg0.ADCdata);
+		        zt1.calibrate(sg1.ADCdata);
+		        zt2.calibrate(sg2.ADCdata);
+		    }
+		} else {
+		    // 只要按键松开（电平变回 1），立即清零计时器
+		    pressStartTime = 0;
+		}
 		// Send the report
 		USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&report, sizeof(report));
-		HAL_Delay(5);
+		//HAL_Delay(5);
 
 		// ------------------- CPU 占用率统计 -------------------
 		uint32_t now = DWT->CYCCNT;
