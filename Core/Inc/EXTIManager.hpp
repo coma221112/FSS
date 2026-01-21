@@ -44,13 +44,19 @@ public:
     }
 };
 
+volatile uint32_t irq_cycles = 0;      // 中断执行时间（CPU ticks）
+volatile uint32_t irq_count = 0;      // 中断触发次数
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-    EXTI_Manager::dispatch(GPIO_Pin);
+	uint32_t start = DWT->CYCCNT;     // 记录进入中断的 CPU cycle
+	EXTI_Manager::dispatch(GPIO_Pin);
+	uint32_t end = DWT->CYCCNT;
+	irq_cycles += (end - start);
+	irq_count++;
 }
 
 #ifdef __cplusplus

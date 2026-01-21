@@ -16,9 +16,9 @@ public:
     GPIOPin DOUT;
     GPIOPin SCK;
 
-    int32_t ADCdata = 0;
-    int8_t configState = 0; // 对应原本的 state_g_config
-    bool configGood = false;
+    volatile int32_t ADCdata = 0;
+    volatile int8_t configState = 0; // 对应原本的 state_g_config
+    volatile bool configGood = false;
     uint8_t sampleCounter = 0;
 
     static inline uint8_t targetConfig = 0b01101100;

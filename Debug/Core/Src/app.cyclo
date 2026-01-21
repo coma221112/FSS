@@ -1,6 +1,6 @@
 ../Core/Inc/EXTIManager.hpp:25:17:static void EXTI_Manager::registerPin(uint16_t, EXTI_Observer*)	6
 ../Core/Inc/EXTIManager.hpp:37:17:static void EXTI_Manager::dispatch(uint16_t)	5
-../Core/Inc/EXTIManager.hpp:52:6:void HAL_GPIO_EXTI_Callback(uint16_t)	1
+../Core/Inc/EXTIManager.hpp:54:6:void HAL_GPIO_EXTI_Callback(uint16_t)	1
 ../Core/Inc/GPIOHelper.hpp:23:5:GPIOPin::GPIOPin(GPIO_TypeDef*, uint16_t)	1
 ../Core/Inc/GPIOHelper.hpp:26:17:void GPIOPin::write(bool) const	2
 ../Core/Inc/GPIOHelper.hpp:33:17:bool GPIOPin::read() const	1
@@ -23,10 +23,10 @@
 ../Core/Inc/CS1237.hpp:143:10:void CS1237::delay_us(uint32_t)	2
 ../Core/Inc/ZeroTracker.hpp:17:5:ZeroTracker::ZeroTracker(int32_t)	1
 ../Core/Inc/ZeroTracker.hpp:27:13:int32_t ZeroTracker::update(int32_t)	4
-../Core/Src/app.cpp:53:17:void RealMain()	4
+../Core/Src/app.cpp:53:17:void RealMain()	6
 ../Core/Inc/CS1237.hpp:14:7:CS1237::~CS1237()	1
 ../Core/Inc/CS1237.hpp:14:7:virtual CS1237::~CS1237()	1
-../Core/Src/app.cpp:96:1:void __static_initialization_and_destruction_0()	1
-../Core/Src/app.cpp:96:1:void __static_initialization_and_destruction_1()	1
-../Core/Src/app.cpp:96:1:cpp)	1
-../Core/Src/app.cpp:96:1:cpp)	1
+../Core/Src/app.cpp:120:1:void __static_initialization_and_destruction_0()	1
+../Core/Src/app.cpp:120:1:void __static_initialization_and_destruction_1()	1
+../Core/Src/app.cpp:120:1:cpp)	1
+../Core/Src/app.cpp:120:1:cpp)	1

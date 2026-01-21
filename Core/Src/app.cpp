@@ -36,7 +36,11 @@ typedef struct
       uint32_t button18 : 1;
       uint32_t button19 : 1;
       uint32_t button20 : 1;
-      uint32_t padding  : 12;  // Padding to align to 32 bits
+      uint32_t button21 : 1;
+      uint32_t button22 : 1;
+      uint32_t button23 : 1;
+      uint32_t button24 : 1;
+      uint32_t padding  : 8;  // Padding to align to 32 bits
     } bits;
     uint32_t all_buttons;      // Access all buttons as a single uint32_t
   } buttons;
@@ -61,6 +65,15 @@ extern "C" void RealMain(){
 	int32_t dv0,dv1,dv2;
 	int32_t maxRange=800000;
 	const float scale = 32767.f / maxRange;
+
+    // 时间窗口（ms）
+    const uint32_t sample_ms = 1000;
+    const uint32_t cpu_freq  = 72000000;  // STM32F103 72 MHz
+    uint32_t window_start    = DWT->CYCCNT;
+    uint32_t last_irq_cycles = 0;
+    uint32_t last_irq_count  = 0;
+    float irq_ratio=0;
+
 	while(true){
 		v0=sg0.ADCdata;
 		v1=sg1.ADCdata;
@@ -88,10 +101,51 @@ extern "C" void RealMain(){
 		report.x = fx;
 		report.y = fy;
 		report.z = fz;
+		report.rx = dv0*scale;
+		report.ry = dv1*scale;
+		report.rz = dv2*scale;
+
+		report.buttons.bits.button1 = !PE0;
+		report.buttons.bits.button2 = !PE1;
+		report.buttons.bits.button3 = !PC13;
+		report.buttons.bits.button4 = !PF0;
+		report.buttons.bits.button5 = !PF1;
+		report.buttons.bits.button6 = !PF2;
+		report.buttons.bits.button7 = !PF3;
+		report.buttons.bits.button8 = !PF4;
+		report.buttons.bits.button9 = !PF5;
+		report.buttons.bits.button10 = !PF6;
+		report.buttons.bits.button11 = !PF7;
+		report.buttons.bits.button12 = !PF8;
+		report.buttons.bits.button13 = !PF9;
+		report.buttons.bits.button14 = !PF10;
+		report.buttons.bits.button15 = !PC0;
+		report.buttons.bits.button16 = !PC1;
+		report.buttons.bits.button17 = !PC2;
+		report.buttons.bits.button18 = !PC3;
+		report.buttons.bits.button19 = !PA0;
+		report.buttons.bits.button20 = !PA1;
+		report.buttons.bits.button21 = !PA2;
+		report.buttons.bits.button22 = !PE6;
 
 		// Send the report
 		USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&report, sizeof(report));
 		HAL_Delay(5);
+
+		// ------------------- CPU 占用率统计 -------------------
+		uint32_t now = DWT->CYCCNT;
+		uint32_t elapsed_cycles = now - window_start;
+
+		if (elapsed_cycles >= sample_ms * (cpu_freq / 1000)) {
+			uint32_t delta_cycles = irq_cycles - last_irq_cycles;
+			uint32_t delta_count  = irq_count - last_irq_count;
+
+			irq_ratio = (float)delta_cycles / elapsed_cycles;
+
+			last_irq_cycles = irq_cycles;
+			last_irq_count  = irq_count;
+			window_start    = now;
+		}
 	}
 }
 
