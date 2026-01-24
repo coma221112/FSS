@@ -9,76 +9,10 @@
 #include "usbd_customhid.h"
 #include "usb_device.h"
 #include "ZeroTracker.hpp"
+#include "JoystickProtocol.hpp"
+#include "cmath"
 
 extern USBD_HandleTypeDef hUsbDeviceFS;
-
-typedef struct
-{
-  union {
-    struct {
-      uint32_t button1  : 1;
-      uint32_t button2  : 1;
-      uint32_t button3  : 1;
-      uint32_t button4  : 1;
-      uint32_t button5  : 1;
-      uint32_t button6  : 1;
-      uint32_t button7  : 1;
-      uint32_t button8  : 1;
-      uint32_t button9  : 1;
-      uint32_t button10 : 1;
-      uint32_t button11 : 1;
-      uint32_t button12 : 1;
-      uint32_t button13 : 1;
-      uint32_t button14 : 1;
-      uint32_t button15 : 1;
-      uint32_t button16 : 1;
-      uint32_t button17 : 1;
-      uint32_t button18 : 1;
-      uint32_t button19 : 1;
-      uint32_t button20 : 1;
-      uint32_t button21 : 1;
-      uint32_t button22 : 1;
-      uint32_t button23 : 1;
-      uint32_t button24 : 1;
-      uint32_t padding  : 8;  // Padding to align to 32 bits
-    } bits;
-    uint32_t all_buttons;      // Access all buttons as a single uint32_t
-  } buttons;
-
-  int16_t x;      // Axis X (-32768 to 32767)
-  int16_t y;      // Axis Y (-32768 to 32767)
-  int16_t z;      // Axis Z (-32768 to 32767)
-  int16_t rx;     // Axis Rx (-32768 to 32767)
-  int16_t ry;     // Axis Ry (-32768 to 32767)
-  int16_t rz;     // Axis Rz (-32768 to 32767)
-
-} __attribute__((packed)) USB_HID_JoystickReport_t;
-
-typedef struct __attribute__((packed)) {
-    // --- 传感器量程与灵敏度 ---
-    int32_t maxRange;          // 对应代码中的 maxRange (默认 2400000)
-    float   sensitivityScale;  // 预留：可在 scale 基础上进一步微调灵敏度
-
-    // --- 物理计算系数 (用于坐标变换公式) ---
-    // fx ≈ cos_factor * (dv2 - dv1)
-    // fy ≈ sin_factor * (0.5*(dv1 + dv2) - dv0)
-    float   xy_factor;         // 对应代码中的 0.866f (cos 30°)
-
-    // --- 校准逻辑参数 ---
-    uint32_t calibLongPressMs; // 触发校准所需的长按时间 (默认 5000)
-
-    // --- 摇杆性能微调 ---
-    uint16_t deadzone;         // 软件死区，防止静止时抖动
-    uint8_t  invertX;          // 是否反转X轴 (0: 正常, 1: 反转)
-    uint8_t  invertY;          // 是否反转Y轴 (0: 正常, 1: 反转)
-    uint8_t  invertZ;          // 是否反转Z轴 (0: 正常, 1: 反转)
-
-    // --- 采样与更新频率控制 ---
-    uint16_t reportIntervalMs; // 发送 HID 报告的时间间隔 (HAL_Delay 的替代值)
-
-    // 预留槽位方便后续扩展而不破坏结构体大小
-    uint8_t  reserved[8];
-} JoystickConfig_t;
 
 uint32_t DWT_GetUs(void) {
     return DWT->CYCCNT / (HAL_RCC_GetHCLKFreq() / 1000000);
@@ -93,36 +27,33 @@ typedef struct {
 } Button_Typedef;
 Button_Typedef buttons[NUM_BUTTONS] = {0};
 uint8_t button_stable_state[NUM_BUTTONS] = {0};
+uint8_t raw_pins[NUM_BUTTONS];
+
+inline int32_t ApplyDeadzone(int32_t Value, uint16_t Threshold) {
+    if (Value > (int32_t)Threshold) return Value - Threshold;
+    if (Value < -(int32_t)Threshold) return Value + Threshold;
+    return 0;
+}
+
+
 
 extern "C" void RealMain(){
 	while(!(sg0.configGood&&sg1.configGood&&sg2.configGood));
 	PE5=0;
 
-	USB_HID_JoystickReport_t report = {0};
 	ZeroTracker zt0(sg0.ADCdata),zt1(sg1.ADCdata),zt2(sg2.ADCdata);
 	int32_t v0,v1,v2;
 	int32_t dc0,dc1,dc2;
 	int32_t dv0,dv1,dv2;
-	int32_t maxRange=2400000;
-	const float scale = 32767.f / maxRange;
-
-
-
-
-	// 定义引脚数组方便循环处理
-	uint8_t raw_pins[NUM_BUTTONS];
-
-    // 时间窗口（ms）
-//    const uint32_t sample_ms = 1000;
-//    const uint32_t cpu_freq  = 72000000;  // STM32F103 72 MHz
-//    uint32_t window_start    = DWT->CYCCNT;
-//    uint32_t last_irq_cycles = 0;
-//    uint32_t last_irq_count  = 0;
-//    float irq_ratio=0;
     uint32_t lastL=0;
+
 	while(true){
 		uint32_t loopTime=DWT_GetUs()-lastL;
 		lastL = DWT_GetUs();
+
+		int32_t maxRange = joystickConfig.maxRange;
+		float scale = 32767.f / maxRange;
+
 		v0=sg0.ADCdata;
 		v1=sg1.ADCdata;
 		v2=sg2.ADCdata;
@@ -132,20 +63,40 @@ extern "C" void RealMain(){
 		dv0=v0-dc0;
 		dv1=v1-dc1;
 		dv2=v2-dc2;
+
 		// X component: fx = v2*cos(330°) + v1*cos(210°) + v0*cos(90°)
 		//              fx = v2*0.866 + v1*(-0.866) + v0*0
 		//              fx ≈ 0.866*(v2 - v1)
 		int16_t fx = (int16_t)__SSAT((int32_t)((dv2 - dv1) * scale * 0.866f), 16);
-
 		// Y component: fy = v0*sin(90°) + v1*sin(210°) + v2*sin(330°)
 		//              fy = v0*1 + v1*(-0.5) + v2*(-0.5)
 		//              fy = v0 - 0.5*(v1 + v2)
 		int16_t fy = (int16_t)__SSAT((int32_t)((0.5f*(dv1 + dv2) - dv0) * scale), 16);
-
 		// Z component: average compression (all sensors pushed down)
 		int16_t fz = (int16_t)__SSAT((int32_t)((dv0 + dv1 + dv2) * scale / 3.f), 16);
+//		fx=ApplyDeadzone(fx,joystickConfig.deadzoneX);
+//		fy=ApplyDeadzone(fy,joystickConfig.deadzoneY);
+//		fz=ApplyDeadzone(fz,joystickConfig.deadzoneZ);
+		// 1. 计算合力的大小（模长）
+		float magnitude = sqrt(fx * fx + fy * fy);
+
+		// 2. 检查是否在死区内
+		if (magnitude < joystickConfig.deadzoneX) { // 这里用 DeadzoneX 作为半径
+		    fx = 0;
+		    fy = 0;
+		} else {
+		    // 3. 线性重映射（可选）：让输出从死区边缘平滑起始
+		    float factor = (magnitude - joystickConfig.deadzoneX) / (32767 - joystickConfig.deadzoneX);
+		    // 防止溢出
+		    if (factor > 1.0f) factor = 1.0f;
+
+		    // 重新缩放矢量
+		    fx = (fx / magnitude) * 32767 * factor;
+		    fy = (fy / magnitude) * 32767 * factor;
+		}
 
 		// Set axes
+		auto& report = joystickReport;
 		report.x = fx;
 		report.y = fy;
 		report.z = fz;
@@ -153,6 +104,7 @@ extern "C" void RealMain(){
 		report.ry = dv1*scale;
 		report.rz = dv2*scale;
 		report.rz = loopTime;
+
 		raw_pins[0] = !PA0;
 		raw_pins[1] = !PF2;
 		raw_pins[2] = !PA1;
@@ -197,6 +149,7 @@ extern "C" void RealMain(){
 		    buttons[i].last_raw_state = current_raw;
 		}
 
+		//report.btn1_8=button_stable_state[0];
 		report.buttons.bits.button1  = button_stable_state[0];
 		report.buttons.bits.button2  = button_stable_state[1];
 		report.buttons.bits.button3  = button_stable_state[2];
@@ -229,7 +182,7 @@ extern "C" void RealMain(){
 		    }
 
 		    // 判断按下持续时间是否超过 5000 毫秒
-		    if (HAL_GetTick() - pressStartTime > 5000) {
+		    if (HAL_GetTick() - pressStartTime > joystickConfig.calibLongPressMs) {
 		        zt0.calibrate(sg0.ADCdata);
 		        zt1.calibrate(sg1.ADCdata);
 		        zt2.calibrate(sg2.ADCdata);
@@ -239,26 +192,18 @@ extern "C" void RealMain(){
 		    pressStartTime = 0;
 		}
 		// Send the report
-		//if(DWT_GetUs()-lastL>=500){
-			USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&report, sizeof(report));
-		//}
-		//HAL_Delay(5);
+		static uint32_t lastJoystickSend = 0;
+		static uint32_t lastConfigSend = 0;
 
-		// ------------------- CPU 占用率统计 -------------------
-//		uint32_t now = DWT->CYCCNT;
-//		uint32_t elapsed_cycles = now - window_start;
-//
-//		if (elapsed_cycles >= sample_ms * (cpu_freq / 1000)) {
-//			uint32_t delta_cycles = irq_cycles - last_irq_cycles;
-//			uint32_t delta_count  = irq_count - last_irq_count;
-//
-//			irq_ratio = (float)delta_cycles / elapsed_cycles;
-//
-//			last_irq_cycles = irq_cycles;
-//			last_irq_count  = irq_count;
-//			window_start    = now;
-//		}
 
+		if (configNeedsSending) {
+		    if (HID_SendReport_Safe(&hUsbDeviceFS, (uint8_t*)&joystickConfig, sizeof(joystickConfig), 1) == USBD_OK) {
+		    	configNeedsSending = false;
+		    }
+		}
+		else{
+			HID_SendReport_Safe(&hUsbDeviceFS, (uint8_t*)&report, sizeof(report), 0);
+		}
 	}
 }
 

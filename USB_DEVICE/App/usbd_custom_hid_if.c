@@ -22,7 +22,7 @@
 #include "usbd_custom_hid_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+#include "JoystickProtocol.hpp"
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -95,6 +95,7 @@ __ALIGN_BEGIN static uint8_t CUSTOM_HID_ReportDesc_FS[USBD_CUSTOM_HID_REPORT_DES
   0x09, 0x04,       // Usage (Joystick)
   0xA1, 0x01,       // Collection (Application)
 
+  0x85, 0x01,
   // Buttons 1..20
   0x05, 0x09,       //   Usage Page (Button)
   0x19, 0x01,       //   Usage Minimum (Button 1)
@@ -123,6 +124,28 @@ __ALIGN_BEGIN static uint8_t CUSTOM_HID_ReportDesc_FS[USBD_CUSTOM_HID_REPORT_DES
   0x75, 0x10,       //   Report Size (16 bits)
   0x95, 0x06,       //   Report Count (6)
   0x81, 0x02,       //   Input (Data,Var,Abs)
+
+  // ===== REPORT ID 2: Vendor 63-byte data =====
+  0x85, 0x02,           // Report ID (2)
+  0x06, 0x00, 0xFF,     // Usage Page (Vendor 0xFF00)
+  0x09, 0x01,           // Usage (Vendor Usage 1)
+
+  // Input: device -> host
+  0x15, 0x00,           // Logical Minimum (0)
+  0x26, 0xFF, 0x00,     // Logical Maximum (255)
+  0x75, 0x08,           // Report Size (8)
+  0x95, 0x3F,           // Report Count (63)
+  0x81, 0x02,           // INPUT (Data,Var,Abs)
+
+  // Output: host -> device
+  0x09, 0x01,           // Usage (Vendor Usage 1)
+  0x15, 0x00,           // Logical Minimum (0)
+  0x26, 0xFF, 0x00,     // Logical Maximum (255)
+  0x75, 0x08,           // Report Size (8)
+  0x95, 0x3F,           // Report Count (63)
+  0x91, 0x02,           // OUTPUT (Data,Var,Abs)
+
+
   /* USER CODE END 0 */
   0xC0    /*     END_COLLECTION	             */
 };
@@ -207,7 +230,15 @@ static int8_t CUSTOM_HID_DeInit_FS(void)
 static int8_t CUSTOM_HID_OutEvent_FS(uint8_t event_idx, uint8_t state)
 {
   /* USER CODE BEGIN 6 */
-  return (USBD_OK);
+
+	uint8_t report[64];
+	USBD_CUSTOM_HID_HandleTypeDef *hhid = (USBD_CUSTOM_HID_HandleTypeDef*)hUsbDeviceFS.pClassData;
+	if (hhid->Report_buf[0] != 0x02) return (USBD_OK);
+	// Get the received data
+	memcpy(report, hhid->Report_buf, sizeof(report));
+	if (report[1] != 0xFF)	memcpy(&joystickConfig, hhid->Report_buf, sizeof(JoystickConfig_t));
+	configNeedsSending = 1;
+	return (USBD_OK);
   /* USER CODE END 6 */
 }
 

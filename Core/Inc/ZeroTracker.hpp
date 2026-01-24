@@ -15,8 +15,8 @@
 class ZeroTracker {
 public:
     ZeroTracker(int32_t initialZero = 0)
-        : zero(initialZero), deadzone(40000), fastzone(10000), slowzone(40000)
-        , slowRate(0.05), fastRate(0.1) {}
+        : zero(initialZero), deadzone(2400000), fastzone(10000), slowzone(2400000)
+        , slowRate(10), fastRate(50) {}
 
     void setDeadzone(int32_t threshold) { deadzone = threshold; }
     void setFastzone(int32_t threshold) { fastzone = threshold; }
@@ -25,22 +25,25 @@ public:
     void setFastRate(int8_t rate) { fastRate = rate; }
 
     int32_t update(int32_t rawValue) {
-        int32_t dev = rawValue - zero;
-        int32_t absDev = (dev < 0) ? -dev : dev;
-        float step = 0;
-        if (absDev < deadzone) {
-			if (absDev <= fastzone) {
-				step = fastRate;
-			} else if (absDev <= slowzone) {
-				step = slowRate;
-			}
+    	if(HAL_GetTick()-lastUpdateMS>1000){
+			lastUpdateMS=HAL_GetTick();
+			int32_t dev = rawValue - zero;
+			int32_t absDev = (dev < 0) ? -dev : dev;
+			float step = 0;
+			if (absDev < deadzone) {
+				if (absDev <= fastzone) {
+					step = fastRate;
+				} else if (absDev <= slowzone) {
+					step = slowRate;
+				}
 
-			if (dev > 0) {
-				zero += step;
-			} else {
-				zero -= step;
+				if (dev > 0) {
+					zero += step;
+				} else {
+					zero -= step;
+				}
 			}
-		}
+    	}
         return zero;
         // Beyond slowzone: no tracking
     }
@@ -50,12 +53,13 @@ public:
     void calibrate(int32_t rawValue) { zero = rawValue; }
 
 private:
-    float zero;
+    int32_t lastUpdateMS;
+    int32_t zero;
     int32_t deadzone;   // No movement zone
     int32_t fastzone;   // Fast tracking zone
     int32_t slowzone;   // Slow tracking zone
-    float slowRate;
-    float fastRate;
+    int32_t slowRate;
+    int32_t fastRate;
 };
 
 
