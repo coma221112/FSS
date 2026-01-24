@@ -15,8 +15,8 @@
 class ZeroTracker {
 public:
     ZeroTracker(int32_t initialZero = 0)
-        : zero(initialZero), deadzone(1000), fastzone(10000), slowzone(50000)
-        , slowRate(1), fastRate(5) {}
+        : zero(initialZero), deadzone(40000), fastzone(10000), slowzone(40000)
+        , slowRate(0.05), fastRate(0.1) {}
 
     void setDeadzone(int32_t threshold) { deadzone = threshold; }
     void setFastzone(int32_t threshold) { fastzone = threshold; }
@@ -27,8 +27,8 @@ public:
     int32_t update(int32_t rawValue) {
         int32_t dev = rawValue - zero;
         int32_t absDev = (dev < 0) ? -dev : dev;
-        int32_t step = 0;
-        if (absDev > deadzone) {
+        float step = 0;
+        if (absDev < deadzone) {
 			if (absDev <= fastzone) {
 				step = fastRate;
 			} else if (absDev <= slowzone) {
@@ -50,12 +50,12 @@ public:
     void calibrate(int32_t rawValue) { zero = rawValue; }
 
 private:
-    int32_t zero;
+    float zero;
     int32_t deadzone;   // No movement zone
     int32_t fastzone;   // Fast tracking zone
     int32_t slowzone;   // Slow tracking zone
-    int8_t slowRate;
-    int8_t fastRate;
+    float slowRate;
+    float fastRate;
 };
 
 
