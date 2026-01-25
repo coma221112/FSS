@@ -35,7 +35,34 @@ inline int32_t ApplyDeadzone(int32_t Value, uint16_t Threshold) {
     return 0;
 }
 
+inline float Clamp(float raw_val){
+	return fmaxf(-1.0f, fminf(1.0f, raw_val));
+}
 
+uint8_t HID_SendReport_Safe(USBD_HandleTypeDef *pdev,
+                                        uint8_t *report,
+                                        uint16_t len,
+                                        uint8_t priority)  // 0=normal, 1=high priority
+{
+    USBD_CUSTOM_HID_HandleTypeDef *hhid = (USBD_CUSTOM_HID_HandleTypeDef*)pdev->pClassData;
+
+    if (priority) {
+        // High priority - wait up to 50ms
+        uint32_t start = HAL_GetTick();
+        while (hhid->state == CUSTOM_HID_BUSY) {
+            if ((HAL_GetTick() - start) > 50) {
+                return USBD_BUSY;
+            }
+        }
+        return USBD_CUSTOM_HID_SendReport(pdev, report, len);
+    } else {
+        // Normal priority - drop if busy
+        if (hhid->state == CUSTOM_HID_BUSY) {
+            return USBD_BUSY;
+        }
+        return USBD_CUSTOM_HID_SendReport(pdev, report, len);
+    }
+}
 
 extern "C" void RealMain(){
 	while(!(sg0.configGood&&sg1.configGood&&sg2.configGood));
@@ -48,11 +75,11 @@ extern "C" void RealMain(){
     uint32_t lastL=0;
 
 	while(true){
-		uint32_t loopTime=DWT_GetUs()-lastL;
+		uint32_t loopTime = DWT_GetUs()-lastL;
 		lastL = DWT_GetUs();
 
-		int32_t maxRange = joystickConfig.maxRange;
-		float scale = 32767.f / maxRange;
+		float maxRange = joystickConfig.maxRange;
+		//float scale = 32767.f / maxRange;
 
 		v0=sg0.ADCdata;
 		v1=sg1.ADCdata;
@@ -67,43 +94,41 @@ extern "C" void RealMain(){
 		// X component: fx = v2*cos(330°) + v1*cos(210°) + v0*cos(90°)
 		//              fx = v2*0.866 + v1*(-0.866) + v0*0
 		//              fx ≈ 0.866*(v2 - v1)
-		int16_t fx = (int16_t)__SSAT((int32_t)((dv2 - dv1) * scale * 0.866f), 16);
+		float fx = Clamp((dv2 - dv1) / maxRange * 0.866f);
 		// Y component: fy = v0*sin(90°) + v1*sin(210°) + v2*sin(330°)
 		//              fy = v0*1 + v1*(-0.5) + v2*(-0.5)
 		//              fy = v0 - 0.5*(v1 + v2)
-		int16_t fy = (int16_t)__SSAT((int32_t)((0.5f*(dv1 + dv2) - dv0) * scale), 16);
+		float fy = Clamp((0.5f*(dv1 + dv2) - dv0) / maxRange);
 		// Z component: average compression (all sensors pushed down)
-		int16_t fz = (int16_t)__SSAT((int32_t)((dv0 + dv1 + dv2) * scale / 3.f), 16);
-//		fx=ApplyDeadzone(fx,joystickConfig.deadzoneX);
-//		fy=ApplyDeadzone(fy,joystickConfig.deadzoneY);
-//		fz=ApplyDeadzone(fz,joystickConfig.deadzoneZ);
+		float fz = Clamp(((dv0 + dv1 + dv2) / maxRange / 3.f));
+
 		// 1. 计算合力的大小（模长）
-		float magnitude = sqrt(fx * fx + fy * fy);
+		float magnitude = sqrtf(fx * fx + fy * fy);
 
 		// 2. 检查是否在死区内
-		if (magnitude < joystickConfig.deadzoneX) { // 这里用 DeadzoneX 作为半径
+		if (magnitude < joystickConfig.deadzone) {
 		    fx = 0;
 		    fy = 0;
 		} else {
 		    // 3. 线性重映射（可选）：让输出从死区边缘平滑起始
-		    float factor = (magnitude - joystickConfig.deadzoneX) / (32767 - joystickConfig.deadzoneX);
+		    float factor = (magnitude - joystickConfig.deadzone) / (1 - joystickConfig.deadzone);
 		    // 防止溢出
 		    if (factor > 1.0f) factor = 1.0f;
 
 		    // 重新缩放矢量
-		    fx = (fx / magnitude) * 32767 * factor;
-		    fy = (fy / magnitude) * 32767 * factor;
+		    fx = (fx / magnitude) * factor;
+		    fy = (fy / magnitude) * factor;
 		}
 
 		// Set axes
 		auto& report = joystickReport;
-		report.x = fx;
-		report.y = fy;
-		report.z = fz;
-		report.rx = dv0*scale;
-		report.ry = dv1*scale;
-		report.rz = dv2*scale;
-		report.rz = loopTime;
+		report.x = fx * 32767;
+		report.y = fy * 32767;
+		report.z = fz * 32767;
+		report.rx = dv0 / maxRange * 32767;
+		report.ry = dv1 / maxRange * 32767;
+		report.rz = dv2 / maxRange * 32767;
+		report.lt = loopTime;
 
 		raw_pins[0] = !PA0;
 		raw_pins[1] = !PF2;
